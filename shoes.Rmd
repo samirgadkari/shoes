@@ -1,0 +1,195 @@
+---
+title: "Analyze Shoes Data"
+author: "Samir Gadkari"
+date: "2/20/2021"
+output: html_document
+---
+
+Data Source: [Shoes dataset](https://datafiniti.co)
+
+```{r}
+library(tidyverse)
+library(lubridate)
+```
+
+# 1. Import data
+```{r}
+shoes <- read_csv("../mens_shoe_prices.csv")
+```
+There are 29 parsing problems. Let's see if the rest of our data
+looks good.
+
+```{r}
+nrow(shoes)
+ncol(shoes)
+head(shoes)
+```
+
+We have a lot of rows (other than the 29 parsing failures).
+Let's continue with what we have.
+
+# 2. Analyze
+## 2.1 Select columns and rows
+
+Let's look at which columns have many NA values.
+Then we can decide which ones to use.
+```{r}
+fraction_not_missing <- function(x) {
+  mean(!is.na(x))
+}
+
+x <- sort(unlist(map(shoes, fraction_not_missing)), 
+          decreasing = TRUE)
+
+# Putting the values in a dataframe just makes it easier to read
+df <- tibble(name = names(x), values = as.vector(x))
+knitr::kable(df)
+```
+
+Some things to note about this dataframe:
+
+  * There are many other items than shoes.
+  * The id is not unique - we may not use it, but it's good to note this
+  * categories contain values from the features column's JSON string
+  * dateadded, dateupdated: We will need these if we're looking at timelines.
+                            Are there many rows with different values between these
+                            columns?
+  * keys: contain the brand name / manufacturer number. These have already been parsed
+          into brand and manufacturernumber columns.
+          The brand column is almost fully populated.
+          78% of the manufacturernumber column is populated
+  * name: What you would expect to see as the name of the shoe
+  * prices_amountmax
+  * prices_amountmin
+  * prices_dateadded
+  * prices_dateseen: What is the difference between prices_dateadded and prices_dateseen?
+  * prices_issale
+  * prices_currency: What are all the currencies in this dataset? 
+                     If only one currency, we can ignore this column.
+  * prices_sourceurls: Contains the Website and merchant names.
+                       This has been extracted into the prices_merchant column,
+                       so we can drop this column.
+  * sourceurls: Looks the same as prices_sourceurls. Drop it.
+  * brand: We can use this to compare prices by brand
+  * imageurls: We don't need this. Even if we did, there is no guarantee that
+               the images exist anymore on the website. Drop it.
+  * manufacturernumber: We can use this to see what price range different manufacturers 
+                        target
+  * merchants: Contains "dateSeen" and "name"
+  * features: Provides color, dimensions, etc.
+  * prices_merchant: Contains seller name and website where product is sold
+  
+### 2.1.1 Get columns with only mens shoes
+
+Here we decided not to get sandals, slippers, or crocs since they're
+not shoes. 
+
+We tried using the categories column, but it labeled
+"Mens Shoes" for sandals, infant shoes, and shoe studs.
+You can check the names column
+```{r}
+head((shoes %>% 
+  filter(str_detect(categories, "[Mm]en")) %>%
+  filter(str_detect(categories, "[Ss]hoe")))["name"], n = 15)
+```
+
+This is more precise:
+
+```{r}
+mens_shoes <- shoes %>%
+  filter(str_detect(name, "[Mm]en"))
+mens_shoes <- mens_shoes %>%
+  filter(str_detect(name, "[Ss]hoe") | 
+         str_detect(name, "[Bb]oot") |
+         str_detect(name, "[Ll]oafer") | 
+         str_detect(name, "[Ss]tep") |
+         str_detect(name, "[Ss]neaker") | 
+         str_detect(name, "[Tt]rainer") |
+         str_detect(name, "[Oo]xford") | 
+         str_detect(name, "[Cc]anvas"))
+nrow(mens_shoes)/nrow(shoes)
+head(mens_shoes["name"], n = 15)
+```
+
+That gives us a much smaller dataframe - it contains only 34% 
+of the original number of rows.
+
+### 2.1.2 Are dateadded, dateupdated, and prices_dateseen different?
+
+```{r}
+dateadded <- mens_shoes$dateadded
+dateupdated <- mens_shoes$dateupdated
+prices_dateseen <- mens_shoes$prices_dateseen
+typeof(dateadded)
+typeof(dateupdated)
+typeof(prices_dateseen) # This is a character vector -  convert it.
+prices_dateseen <- ymd_hms(prices_dateseen)
+
+mean(!(dateadded == dateupdated), na.rm = TRUE)
+mean(!(dateupdated == prices_dateseen), na.rm = TRUE)
+mean(!(prices_dateseen == dateadded), na.rm = TRUE)
+```
+
+So we see that dateadded and dateupdated are different 1/3 of the time.
+dateupdated and prices_dateseen are 98% different.
+prices_dateseen and dateadded are 94% different.
+
+Let's see if they're different by more than a day:
+```{r}
+mean(abs(dateadded - dateupdated) > days(1), na.rm = TRUE)
+mean(abs(dateupdated - prices_dateseen) > days(1), na.rm = TRUE)
+mean(abs(prices_dateseen - dateadded) > days(1), na.rm = TRUE)
+```
+
+This output is similar to the output earlier with:
+
+  * 31% difference of more than a day between dateadded and dateupdated
+  * 87% difference of more than a day between dateupdated and 
+    prices_dateseen
+  * 84% difference of more than a day between prices_dateseen and
+    dateadded
+
+This means there is information in these dates that might be useful.
+According to the schema, dateadded was the date when the original
+item was added. dateupdated was the date of the last product update.
+prices_dateseen was the date that the given price was last seen.
+
+### 1.2.3 Can we restrict ourselves to just one currency?
+
+```{r}
+mens_shoes %>% count(prices_currency, sort = TRUE)
+```
+
+Looks like USD is mostly use - let's remove all other rows and
+the currency column.
+
+```{r}
+nrow(mens_shoes)
+mens_shoes <- mens_shoes %>% 
+  filter(prices_currency == "USD") %>%
+  select(-prices_currency)
+nrow(mens_shoes)
+```
+
+That makes sense - we lost around 170 rows. This is around what
+we see when we sum up the frequencies of non-USD currencies above.
+
+### 1.2.4 Drop all columns we don't need
+
+```{r}
+ncol(mens_shoes)
+mens_shoes <- mens_shoes %>%
+  select(-prices_condition, -colors, -upc, -ean, -descriptions,
+         -skus, -manufacturer, -prices_offer, -sizes,
+         -prices_shipping, -dimension, -asins, -reviews,
+         -prices_returnpolicy, -weight, -prices_color,
+         -prices_size, -prices_availability, -prices_warranty,
+         -prices_count, -prices_flavor, -vin, -quantities,
+         -websiteids, -count, -flavors, -isbn, -prices_source,
+         -prices_sourceurls, -sourceurls, -imageurls)
+ncol(mens_shoes)
+```
+
+# 2. Analyse dataset
+
+## 2.1 Which brands are cheaper/costlier
