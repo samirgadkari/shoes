@@ -10,6 +10,8 @@ Data Source: [Shoes dataset](https://datafiniti.co)
 ```{r}
 library(tidyverse)
 library(lubridate)
+library(modelr)
+library(RcppRoll)
 ```
 
 # 1. Import data
@@ -359,32 +361,50 @@ and the canvas is the cheapest.
 If the prices of shoes are inelastic, then the manufacturer
 can increase the price without demand for it dropping.
 
-We're saying that any price that was increased was due to inelasticity.
 We cannot tell from this dataset if the price was increased or decreased.
 The schema does say that prices for this product are given as a list
 with the dateSeen value showing the date that particular price
-was seen. Unfortunately, the processed dataset does not have
-any prices column.
+was seen. Unfortunately, the processed dataset that came with the schema
+shows only that the price changed on a particular date, but not if it was 
+increased or decreased.
 
-If I were working on this dataset, I would ask for that list.
-We cannot proceed anymore along this line of enquiry since we cannot
-tell if the price was decreased or increased. If the price was
-decreased, we could say it is because it was too high for enough demand.
-If the price was increased, we could say it was raised because
-demand was not hurt. This second case is the inelastic pricing
-we want to find.
+If I were working on this dataset, I would ask for that data.
+We cannot proceed anymore along this line of inquiry.
 
-## 2.4 When are prices changed?
+## 2.4 The timeline of price changes
+
+### 2.4.1 When are prices changed?
 
 ```{r}
-mens_shoes %>%
+mens_shoes_summary <- mens_shoes %>%
   filter(dateadded != dateupdated) %>%
   group_by(dateupdated) %>%
   summarise(
     dateupdated = dateupdated,
     n = n()
-  ) %>%
-  ggplot(aes(dateupdated, n)) +
-  geom_point(alpha = 1 / 10)
+  ) 
+
+mens_shoes_summary$rolling_mean <- roll_meanr(mens_shoes_summary$n, n = 60L)
+
+dates <- c(ymd(20160726), ymd(20160915))
+dates <- as_datetime(dates)
+
+mens_shoes_summary %>%
+  ggplot(aes(dateupdated, rolling_mean)) +
+  geom_line(na.rm = TRUE) +
+  annotate(geom = "vline",
+          x = dates,
+          xintercept = dates,
+          linetype = "dashed",
+          color = "black") +
+  annotate(geom = "text",
+           x = dates - ddays(8),
+           label = as.character(dates),
+           y = 50,
+           angle = 90) +
+  xlab("date updated") +
+  ylab("rolling mean")
 ```
 
+Most of the price changes occur starting the end of July and ending
+mid September.
