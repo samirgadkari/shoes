@@ -1,3 +1,6 @@
+# Generated html files
+*.html
+
 # History files
 .Rhistory
 .Rapp.history
