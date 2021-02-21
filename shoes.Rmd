@@ -176,10 +176,11 @@ we see when we sum up the frequencies of non-USD currencies above.
 
 ### 1.2.4 Drop all columns we don't need
 
+
 ```{r}
 ncol(mens_shoes)
 mens_shoes <- mens_shoes %>%
-  select(-prices_condition, -colors, -upc, -ean, -descriptions,
+  select(-colors, -upc, -ean, -descriptions,
          -skus, -manufacturer, -prices_offer, -sizes,
          -prices_shipping, -dimension, -asins, -reviews,
          -prices_returnpolicy, -weight, -prices_color,
@@ -190,6 +191,200 @@ mens_shoes <- mens_shoes %>%
 ncol(mens_shoes)
 ```
 
+### 1.2.5 Convert prices_amountmin and prices_amountmax to numeric
+```{r}
+mens_shoes$prices_amountmax <- as.double(mens_shoes$prices_amountmax)
+mens_shoes$prices_amountmin <- as.double(mens_shoes$prices_amountmin)
+
+typeof(mens_shoes$prices_amountmax)
+typeof(mens_shoes$prices_amountmin)
+```
+
 # 2. Analyse dataset
 
-## 2.1 Which brands are cheaper/costlier
+## 2.1 Which brands are cheapest/costliest?
+
+How many brands are there?
+```{r}
+brands <- mens_shoes %>%
+  count(brand, sort = TRUE)
+
+nrow(brands)
+brands
+```
+
+There are 643 brands. Most of the data are prices for the larger
+brands (Nike, PUMA, VANS, New Balance, Reebok, Jordan, SKECHERS,
+and adidas).
+
+Let's look at how the prices_amountmin and prices_amountmax stack up:
+```{r}
+min(mens_shoes$prices_amountmin)
+max(mens_shoes$prices_amountmin)
+mens_shoes %>%
+  select(prices_amountmax, prices_amountmin) %>%
+  ggplot(aes(prices_amountmin, prices_amountmax)) +
+  geom_point(alpha = 1 / 10) +
+  scale_x_continuous(name = "minimum prices", 
+                     breaks = seq(0, 1500, 300)) +
+  scale_y_continuous(name = "maximum prices", 
+                     breaks = seq(0, 1500, 300))
+```
+
+Prices larger than 300 dont change. Let's see how many prices have a
+different minimum and maximum price:
+```{r}
+mean(mens_shoes$prices_amountmax > mens_shoes$prices_amountmin)
+```
+
+So only around 4.5% of the dataset contain items whose 
+minimum and maximum prices are different. Most of the
+items are at the same price. We should look into these
+items, as they are not price elastic. This means
+that the manufacturer/distributor can increase price,
+and the demand for it will not decrease much. Thus the
+company will make more money.
+
+Let's continue with comparing prices by brand.
+We have to make sure the condition of the product is good.
+We will only consider products in the "new" condition
+```{r}
+mean(!is.na(mens_shoes$prices_condition))
+unique(mens_shoes$prices_condition)
+```
+
+Look at the top 10 largest minimum price brands:
+```{r}
+costliest_brands <- mens_shoes %>%
+  select(brand, prices_condition, prices_amountmin) %>%
+  filter(prices_condition %in% c("New", "new")) %>%
+  arrange(desc(prices_amountmin)) %>%
+  select(-prices_condition)
+
+costliest_brands <- unique(head(costliest_brands["brand"], n = 15))
+costliest_brands
+```
+
+Look at the top 10 smallest maximum price brands:
+
+```{r}
+cheapest_brands <- mens_shoes %>%
+  select(brand, prices_condition, prices_amountmax) %>%
+  filter(prices_condition %in% c("New", "new")) %>%
+  arrange(prices_amountmax) %>%
+  select(-prices_condition)
+
+unique(head(cheapest_brands["brand"], n = 13))
+```
+
+We will assume that MuckBoot and Muck Boots are the same brand.
+There is a "The Original Muck Boot Company". We will replace the
+"Muck Boots" brand with "MuckBoot" brand name.
+
+```{r}
+cheapest_brands$brand <- str_replace_all(cheapest_brands$brand, 
+                                         "Muck Boots", "MuckBoot")
+cheapest_brands <- unique(head(cheapest_brands["brand"], n = 13))
+```
+
+Now we can plot the prices for the cheapest and costliest brands:
+
+```{r}
+top_bottom_brands <- as.vector(rbind(costliest_brands["brand"],
+                               cheapest_brands["brand"]))
+top_bottom_brands <- as.vector(unlist(top_bottom_brands))
+top_bottom_brands
+```
+
+Now let's filter our original data for just these brands:
+
+```{r}
+top_bottom_brands_data <- mens_shoes %>%
+  filter(brand %in% top_bottom_brands) %>%
+  select(brand, prices_amountmin, prices_amountmax)
+
+top_brands <- top_bottom_brands_data %>%
+  select(brand, prices_amountmin) %>%
+  rename(price = prices_amountmin)
+top_brands
+
+bottom_brands <- top_bottom_brands_data %>%
+  select(brand, prices_amountmax) %>%
+  rename(price = prices_amountmax)
+bottom_brands
+
+top_bottom_brands_data <- rbind(top_brands, bottom_brands)
+top_bottom_brands_data
+```
+
+We will now graph the results:
+```{r}
+top_bottom_brands_data %>%
+  ggplot(aes(brand, price)) +
+  geom_boxplot() +
+  coord_flip()
+```
+
+## 2.2 Which type of shoe is cheapest/costliest?
+
+```{r}
+shoe_type <- function(x) {
+  case_when(
+    str_detect(x, "[Ss]hoe") ~ "Shoe",
+    str_detect(x, "[Bb]oot") ~ "Boot",
+    str_detect(x, "[Ll]oafer") ~ "Loafer",
+    str_detect(x, "[Ss]tep") ~ "Step",
+    str_detect(x, "[Ss]neaker") ~ "Sneaker",
+    str_detect(x, "[Tt]rainer") ~ "Trainer",
+    str_detect(x, "[Oo]xford") ~ "Oxford",
+    str_detect(x, "[Cc]anvas") ~ "Canvas",
+    TRUE ~ NA_character_
+  )
+}
+
+mens_shoes %>%
+  mutate(shoe_type = shoe_type(name)) %>%
+  group_by(shoe_type) %>%
+  ggplot(aes(x = (prices_amountmax + prices_amountmin) / 2,
+             y = shoe_type,
+             color = shoe_type)) +
+  geom_boxplot()
+```
+
+It is the boot that is the costliest, 
+and the canvas is the cheapest.
+
+## 2.3 Inelastic shoes prices
+
+If the prices of shoes are inelastic, then the manufacturer
+can increase the price without demand for it dropping.
+
+We're saying that any price that was increased was due to inelasticity.
+We cannot tell from this dataset if the price was increased or decreased.
+The schema does say that prices for this product are given as a list
+with the dateSeen value showing the date that particular price
+was seen. Unfortunately, the processed dataset does not have
+any prices column.
+
+If I were working on this dataset, I would ask for that list.
+We cannot proceed anymore along this line of enquiry since we cannot
+tell if the price was decreased or increased. If the price was
+decreased, we could say it is because it was too high for enough demand.
+If the price was increased, we could say it was raised because
+demand was not hurt. This second case is the inelastic pricing
+we want to find.
+
+## 2.4 When are prices changed?
+
+```{r}
+mens_shoes %>%
+  filter(dateadded != dateupdated) %>%
+  group_by(dateupdated) %>%
+  summarise(
+    dateupdated = dateupdated,
+    n = n()
+  ) %>%
+  ggplot(aes(dateupdated, n)) +
+  geom_point(alpha = 1 / 10)
+```
+
