@@ -12,6 +12,8 @@ library(tidyverse)
 library(lubridate)
 library(modelr)
 library(RcppRoll)
+library(ggpubr)
+library(splines)
 ```
 
 # 1. Import data
@@ -376,13 +378,25 @@ We cannot proceed anymore along this line of inquiry.
 ### 2.4.1 When are prices changed?
 
 ```{r}
+# We're using Meteorological seasons, since we want to
+# see if our data has any relation to the weather.
+season <- function(date) {
+  case_when(
+    month(date) >= 3 && month(date) <= 5 ~ "Spring",
+    month(date) >= 6 && month(date) <= 8 ~ "Summer",
+    month(date) >= 9 && month(date) <= 11 ~ "Fall",
+    month(date) == 12 || month(date) >= 1 ~ "Winter"
+  )
+}
+
 mens_shoes_summary <- mens_shoes %>%
   filter(dateadded != dateupdated) %>%
   group_by(dateupdated) %>%
   summarise(
     dateupdated = dateupdated,
     n = n()
-  ) 
+  ) %>%
+  mutate(season = season(dateupdated))
 
 mens_shoes_summary$rolling_mean <- roll_meanr(mens_shoes_summary$n, n = 60L)
 
@@ -390,8 +404,8 @@ dates <- c(ymd(20160726), ymd(20160915))
 dates <- as_datetime(dates)
 
 mens_shoes_summary %>%
-  ggplot(aes(dateupdated, rolling_mean)) +
-  geom_line(na.rm = TRUE) +
+  ggplot(aes(dateupdated, rolling_mean, color = season)) +
+  geom_path(aes(group = 1), size = 1, na.rm = TRUE) +
   annotate(geom = "vline",
           x = dates,
           xintercept = dates,
@@ -407,4 +421,94 @@ mens_shoes_summary %>%
 ```
 
 Most of the price changes occur starting the end of July and ending
-mid September.
+mid September. There are also smaller bumps which may be because
+of seasonal changes. There is a bump around May, and another
+around Jan/Feb 2017. There is no bump around Jan/Feb 2016 because
+that's when the data started, so the prices were not updated yet.
+
+### 2.4.2 Model the price changes
+
+Let's remove the columns we don't need:
+```{r}
+mens_shoes_summary <- mens_shoes_summary %>%
+  filter(!is.na(rolling_mean))
+mens_shoes_summary$season <- as.factor(mens_shoes_summary$season)
+mens_shoes_summary <- mens_shoes_summary %>% select(-n)
+```
+
+Also, for future we will need to create and test many models.
+Let's create functions that will let us do that:
+```{r}
+apply_model_and_plot <- function(model, data, labels) {
+  plot_pred <- data %>%
+    add_predictions(model) %>%
+    ggplot(aes(dateupdated, pred)) +
+    geom_line(na.rm = TRUE)
+
+  plot_resid <- data %>%
+    add_residuals(model) %>%
+    ggplot(aes(dateupdated, resid)) +
+    geom_line(na.rm = TRUE)
+  
+  ggarrange(plot_pred, plot_resid, 
+            labels = labels,
+            hjust = -0.1,
+            nrow = 2, ncol = 1)
+}
+```
+
+If we model the price changes, we may be able to predict future
+years prices. We don't have the data for that, but we will go
+through this exercise for the one year we have.
+
+```{r}
+mod_rolling_mean <- lm(rolling_mean ~ dateupdated * season,
+                       data = mens_shoes_summary)
+apply_model_and_plot(mod_rolling_mean, mens_shoes_summary,
+                     c("Interaction model predictions", 
+                       "Interaction model residuals"))
+broom::glance(mod_rolling_mean)
+```
+
+You can see that a simple linear model is not going to model
+this data well:
+
+Let's try splines:
+```{r}
+# mod_rolling_mean <- 
+#   MASS::rlm(rolling_mean ~ ns(dateupdated, 5) * season,
+#             data = mens_shoes_summary)
+# apply_model_and_plot(mod_rolling_mean, mens_shoes_summary,
+#                      c("Spline model predictions", 
+#                        "Spline model residuals"))
+# broom::glance(mod_rolling_mean)
+```
+
+With splines, we get an error:
+"'x' is singular: singular fits are not implemented in 'rlm'".
+I have the season factor, but it is all populated:
+```{r}
+sum(mens_shoes_summary %>% 
+  group_by(season) %>%
+  summarise(n = n()) %>%
+  select(n))
+
+nrow(mens_shoes_summary)
+```
+
+This is probably happening because there are duplicate rows.
+Let's try to remove them and then do a fit:
+```{r}
+unique_rows <- unique(mens_shoes_summary)
+# mod_rolling_mean <- 
+#   MASS::rlm(rolling_mean ~ ns(dateupdated, 5) * season,
+#             data = unique_rows)
+# apply_model_and_plot(mod_rolling_mean, unique_rows,
+#                      c("Spline model predictions", 
+#                      "Spline model residuals"))
+# broom::glance(mod_rolling_mean)
+```
+
+This still gives the same error. Let's put this aside for now.
+
+
