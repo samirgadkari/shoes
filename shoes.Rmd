@@ -511,4 +511,60 @@ unique_rows <- unique(mens_shoes_summary)
 
 This still gives the same error. Let's put this aside for now.
 
+# 3. Save processed file to disk
+
+We will use the processed file for our Shiny app.
+We have to make sure there is not much processing required
+on the app server. If we do, it will slow down the user interface.
+
+Shiny apps on shinyapp.io also require the data files to be
+inside the directory of subdirectory where the main app resides.
+```{r}
+head(mens_shoes_summary)
+typeof(dateupdated)
+write_csv(mens_shoes_summary, "processed/mens_shoes_summary.csv")
+```
+
+# 4. Mens shoe price changes (per shoe type)
+
+```{r}
+head(mens_shoes)
+head(mens_shoes_summary)
+
+mens_shoes_with_type <- mens_shoes %>%
+  filter(dateadded != dateupdated) %>%
+  group_by(dateupdated) %>%
+  mutate(
+    dateupdated = dateupdated,
+    shoe_type = shoe_type(name),
+    season = season(dateupdated)
+  ) %>%
+  summarise(
+    dateupdated = dateupdated,
+    shoe_type = shoe_type(shoe_type),
+    season = season(dateupdated),
+    n = n()
+  )
+
+unique(mens_shoes_with_type %>% 
+  group_by(shoe_type) %>%
+  summarise(
+    shoe_type = shoe_type,
+    n = n()
+  )
+)
+```
+
+There are too many prices to see. The number of Step and Trainer
+price changes are really small to count. Let's remove them.
+
+```{r}
+mens_shoes_with_type <- mens_shoes_with_type %>%
+  filter(shoe_type != "Step" & shoe_type != "Trainer")
+
+mens_shoes_with_type %>%
+  ggplot(aes(dateupdated, n, color = shoe_type)) +
+  geom_point() +
+  labs(x = "Date updated", y = "Count")
+```
 
