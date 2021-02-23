@@ -1,3 +1,6 @@
+# Connection with remote shinyapp.io server
+rsconnect
+
 # Generated html files
 *.html
 
