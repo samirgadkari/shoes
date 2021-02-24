@@ -36,14 +36,14 @@ ui <- dashboardPage(
       tabItem(tabName = "dataplot1",
               fluidRow(
                 h3("Number of pricing changes (for all mens shoes)"),
-                box(plotOutput("data1", height = 250)),
+                box(plotOutput("data1", height = "250px")),
                 box(
                   dateRangeInput(inputId = "daterange1", 
                                  label = "Date Range",
                                  start = date_updated_min,
                                  end = date_updated_max)
                 )
-              ),
+              )
       ),
       tabItem(tabName = "dataplot2",
               fluidRow(
@@ -60,14 +60,14 @@ ui <- dashboardPage(
                                      choices = shoe_types,
                                      selected = shoe_types)
                 ),
-                box(plotOutput("data2", height = 300)),
-                box(plotOutput("data3", height = 300))
-              ),
+                box(plotOutput("data2", height = "300px")),
+                box(plotOutput("data3", height = "300px"))
+              )
       ),
       tabItem(tabName = "dataplot3",
               fluidRow(
                 h3("High and low brands by prices"),
-                box(plotOutput("data4", width = 580, height = 500)),
+                box(plotOutput("data4", width = "800px", height = "500px"))
               ),
       ),
       tabItem(tabName = "about",
