@@ -114,7 +114,7 @@ server <- function(input, output, session) {
       geom_path(aes(group = 1), size = 1) +
       labs(x = "Date price changed", 
            y = "Rolling mean of\nnumber of price changes")
-  })
+  }, res = 96)
 
   output$data2 <- renderPlot({
     
@@ -129,7 +129,7 @@ server <- function(input, output, session) {
       geom_point() +
       labs(x = "Date price changed", 
            y = "Number of price changes")
-  })
+  }, res = 96)
   
   output$data3 <- renderPlot({
     
@@ -143,7 +143,7 @@ server <- function(input, output, session) {
       ggplot(aes(dateupdated, avg_price, color = shoe_type)) +
       geom_boxplot() +
       labs(x = "Average price", y = "Shoe type")
-  })
+  }, res = 96)
 
   output$data4 <- renderPlot({
     
@@ -152,7 +152,7 @@ server <- function(input, output, session) {
       geom_boxplot() +
       labs(x = "Brand", y = "Price") +
       coord_flip()
-  })
+  }, res = 96)
 }
 
 shinyApp(ui, server)
