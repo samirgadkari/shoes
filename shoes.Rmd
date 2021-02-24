@@ -12,8 +12,8 @@ library(tidyverse)
 library(lubridate)
 library(modelr)
 library(RcppRoll)
-library(ggpubr)
 library(splines)
+library(gbm)
 ```
 
 # 1. Import data
@@ -462,20 +462,20 @@ Also, for future we will need to create and test many models.
 Let's create functions that will let us do that:
 ```{r}
 apply_model_and_plot <- function(model, data, labels) {
-  plot_pred <- data %>%
+  print(data %>%
     add_predictions(model) %>%
     ggplot(aes(dateupdated, pred)) +
-    geom_line(na.rm = TRUE)
+    geom_line(na.rm = TRUE))
 
-  plot_resid <- data %>%
+  print(data %>%
     add_residuals(model) %>%
     ggplot(aes(dateupdated, resid)) +
-    geom_line(na.rm = TRUE)
+    geom_line(na.rm = TRUE))
   
-  ggarrange(plot_pred, plot_resid, 
-            labels = labels,
-            hjust = -0.1,
-            nrow = 2, ncol = 1)
+  # ggarrange(plot_pred, plot_resid, 
+  #           labels = labels,
+  #           hjust = -0.1,
+  #           nrow = 2, ncol = 1)
 }
 ```
 
@@ -593,3 +593,19 @@ mens_shoes_with_type %>%
 ```{r}
 write_csv(mens_shoes_with_type, "processed/mens_shoes_with_type.csv")
 ```
+
+# 3. Many models
+```{r}
+mens_shoes_summary$dateupdated <- 
+  as.factor(mens_shoes_summary$dateupdated)
+mod_gbm <- gbm(rolling_mean ~ dateupdated + season,
+               data = mens_shoes_summary,
+               n.trees = 2000,
+               interaction.depth = 25,
+               shrinkage = 0.1)
+apply_model_and_plot(mod_gbm, mens_shoes_summary,
+                     c("Interaction model predictions", 
+                       "Interaction model residuals"))
+broom::glance(mod_rolling_mean)
+```
+
