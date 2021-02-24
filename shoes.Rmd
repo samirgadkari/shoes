@@ -5,7 +5,7 @@ date: "2/20/2021"
 output: html_document
 ---
 
-Data Source: [Shoes dataset](https://datafiniti.co)
+Data Source: [Shoes dataset](https://datafiniti.co/products/product-data/)
 
 ```{r}
 library(tidyverse)
@@ -593,19 +593,3 @@ mens_shoes_with_type %>%
 ```{r}
 write_csv(mens_shoes_with_type, "processed/mens_shoes_with_type.csv")
 ```
-
-# 3. Many models
-```{r}
-mens_shoes_summary$dateupdated <- 
-  as.factor(mens_shoes_summary$dateupdated)
-mod_gbm <- gbm(rolling_mean ~ dateupdated + season,
-               data = mens_shoes_summary,
-               n.trees = 2000,
-               interaction.depth = 25,
-               shrinkage = 0.1)
-apply_model_and_plot(mod_gbm, mens_shoes_summary,
-                     c("Interaction model predictions", 
-                       "Interaction model residuals"))
-broom::glance(mod_rolling_mean)
-```
-
