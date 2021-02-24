@@ -16,17 +16,19 @@ top_bottom_brands_data <-
   vroom("processed/top_bottom_brands.csv")
 
 ui <- dashboardPage(
-  dashboardHeader(title = "Mens Shoe Prices"),
+  dashboardHeader(title = "Mens Shoes"),
   dashboardSidebar(
     sidebarMenu(
       menuItem("Prices for all shoes", tabName = "dataplot1", 
-               icon = icon("dashboard")),
+               icon = icon("tags")),
       menuItem("Prices by shoe type", tabName = "dataplot2",
-               icon = icon("dashboard")),
+               icon = icon("tags")),
       menuItem("Brands", tabName = "dataplot3",
-               icon = icon("dashboard")),
-      menuItem("Modeling", tabName = "modeling", 
-               icon = icon("th"))
+               icon = icon("copyright")),
+      menuItem("About", tabName = "about",
+               icon = icon("address-card"))
+      # menuItem("Modeling", tabName = "modeling", 
+      #          icon = icon("th"))
     )
   ),
   dashboardBody(
@@ -65,19 +67,36 @@ ui <- dashboardPage(
       tabItem(tabName = "dataplot3",
               fluidRow(
                 h3("High and low brands by prices"),
-                box(plotOutput("data4", height = 500)),
+                box(plotOutput("data4", width = 580, height = 500)),
               ),
       ),
-      tabItem(tabName = "modeling",
+      tabItem(tabName = "about",
               fluidRow(
-                h3("Number of pricing changes (mens shoes by type)"),
-                box(
-                  title = "Controls",
-                  selectInput("model", "Model type", 
-                              c("Linear Regression", "SVM", "Random Forest")),
-                ),
+                h3("Data and source code locations")
+              ),
+              fluidRow(
+                HTML('&nbsp;'), HTML('&nbsp;'),
+                HTML('&nbsp;'), HTML('&nbsp;'),
+                a("Data obtained from Datafiniti", 
+                  href = "https://datafiniti.co/products/product-data/")
+              ),
+              fluidRow(
+                HTML('&nbsp;'), HTML('&nbsp;'),
+                HTML('&nbsp;'), HTML('&nbsp;'),
+                a("Source code at Github ", 
+                  href = "https://github.com/samirgadkari/shoes")
               )
       )
+      # tabItem(tabName = "modeling",
+      #         fluidRow(
+      #           h3("Number of pricing changes (mens shoes by type)"),
+      #           box(
+      #             title = "Controls",
+      #             selectInput("model", "Model type", 
+      #                         c("Linear Regression", "SVM", "Random Forest")),
+      #           ),
+      #         )
+      # )
     ) # tabItems
   ) # dashboardBody
 ) # dashboardPage
@@ -131,7 +150,7 @@ server <- function(input, output, session) {
     top_bottom_brands_data %>%
       ggplot(aes(brand, price, color = brand)) +
       geom_boxplot() +
-      labs(x = "Price", y = "Brand") +
+      labs(x = "Brand", y = "Price") +
       coord_flip()
   })
 }
