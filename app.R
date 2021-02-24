@@ -8,12 +8,22 @@ library(vroom)
 mens_shoes_summary <- vroom("processed/mens_shoes_summary.csv")
 date_updated_min <- min(mens_shoes_summary$dateupdated)
 date_updated_max <- max(mens_shoes_summary$dateupdated)
+mens_shoes_with_type <- vroom("processed/mens_shoes_with_type.csv")
+shoe_types <- unique(mens_shoes_with_type$shoe_type)
+mens_shoe_prices_by_type <- 
+  vroom("processed/mens_shoe_prices_by_type.csv")
+top_bottom_brands_data <-
+  vroom("processed/top_bottom_brands.csv")
 
 ui <- dashboardPage(
   dashboardHeader(title = "Mens Shoe Prices"),
   dashboardSidebar(
     sidebarMenu(
-      menuItem("DataPlot", tabName = "dataplot", 
+      menuItem("Prices for all shoes", tabName = "dataplot1", 
+               icon = icon("dashboard")),
+      menuItem("Prices by shoe type", tabName = "dataplot2",
+               icon = icon("dashboard")),
+      menuItem("Brands", tabName = "dataplot3",
                icon = icon("dashboard")),
       menuItem("Modeling", tabName = "modeling", 
                icon = icon("th"))
@@ -21,21 +31,46 @@ ui <- dashboardPage(
   ),
   dashboardBody(
     tabItems(
-      tabItem(tabName = "dataplot",
+      tabItem(tabName = "dataplot1",
               fluidRow(
-                h2("Number of pricing changes (for all mens shoes)"),
-                box(plotOutput("data", height = 250)),
+                h3("Number of pricing changes (for all mens shoes)"),
+                box(plotOutput("data1", height = 250)),
                 box(
-                  dateRangeInput(inputId = "daterange", 
+                  dateRangeInput(inputId = "daterange1", 
                                  label = "Date Range",
                                  start = date_updated_min,
                                  end = date_updated_max)
                 )
               ),
       ),
+      tabItem(tabName = "dataplot2",
+              fluidRow(
+                h3("Number of pricing changes (for different shoe types)"),
+                box(
+                  dateRangeInput(inputId = "daterange2", 
+                                 label = "Date Range",
+                                 start = date_updated_min,
+                                 end = date_updated_max)
+                ),
+                box(
+                  checkboxGroupInput("shoe_type", 
+                                     "Select shoe types to display", 
+                                     choices = shoe_types,
+                                     selected = shoe_types)
+                ),
+                box(plotOutput("data2", height = 300)),
+                box(plotOutput("data3", height = 300))
+              ),
+      ),
+      tabItem(tabName = "dataplot3",
+              fluidRow(
+                h3("High and low brands by prices"),
+                box(plotOutput("data4", height = 500)),
+              ),
+      ),
       tabItem(tabName = "modeling",
               fluidRow(
-                h2("Number of pricing changes (mens shoes by type)"),
+                h3("Number of pricing changes (mens shoes by type)"),
                 box(
                   title = "Controls",
                   selectInput("model", "Model type", 
@@ -49,9 +84,9 @@ ui <- dashboardPage(
 
 
 server <- function(input, output, session) {
-  output$data <- renderPlot({
+  output$data1 <- renderPlot({
     
-    date_range <- input$daterange
+    date_range <- input$daterange1
     
     mens_shoes_summary %>%
       filter(dateupdated >= date_range[1] & 
@@ -60,6 +95,44 @@ server <- function(input, output, session) {
       geom_path(aes(group = 1), size = 1) +
       labs(x = "Date price changed", 
            y = "Rolling mean of\nnumber of price changes")
+  })
+
+  output$data2 <- renderPlot({
+    
+    date_range <- input$daterange2
+    shoe_types_selected <- input$shoe_type
+    
+    mens_shoes_with_type %>%
+      filter(dateupdated >= date_range[1] & 
+               dateupdated <= date_range[2] &
+               (shoe_type %in% shoe_types_selected)) %>%
+      ggplot(aes(dateupdated, n, color = shoe_type)) +
+      geom_point() +
+      labs(x = "Date price changed", 
+           y = "Number of price changes")
+  })
+  
+  output$data3 <- renderPlot({
+    
+    date_range <- input$daterange2
+    shoe_types_selected <- input$shoe_type
+    
+    mens_shoe_prices_by_type %>%
+      filter(dateupdated >= date_range[1] & 
+               dateupdated <= date_range[2] &
+               (shoe_type %in% shoe_types_selected)) %>%
+      ggplot(aes(dateupdated, avg_price, color = shoe_type)) +
+      geom_boxplot() +
+      labs(x = "Average price", y = "Shoe type")
+  })
+
+  output$data4 <- renderPlot({
+    
+    top_bottom_brands_data %>%
+      ggplot(aes(brand, price, color = brand)) +
+      geom_boxplot() +
+      labs(x = "Price", y = "Brand") +
+      coord_flip()
   })
 }
 
